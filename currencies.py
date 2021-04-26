@@ -97,6 +97,7 @@ class CryptoUnit(CurrencyUnit):
     def create_currency(self, base_currency_unit=None):
         if base_currency_unit is None:
             base_currency_unit = self
+
         return CryptoCurrency(self.name, base_currency_unit)
 
     def __str__(self):
@@ -250,7 +251,8 @@ class Currency():
             f"REALIZED PROFIT {self.ticker + buy_currency.ticker}: {realized_profit}")
         self.realized_profit += realized_profit
         buy_rate = value_sold/value_bought
-        buy_currency.buy(self, value_bought, buy_rate, buy_fee=buy_fee,date=date)
+        buy_currency.buy(self, value_bought, buy_rate,
+                         buy_fee=buy_fee, date=date)
         self.compute_avg_base_price()
         logging.debug(f"Sell {self.ticker} finished")
         filtered_global_var = filter(lambda x: not (

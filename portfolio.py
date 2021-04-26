@@ -16,7 +16,7 @@ class Portfolio():
         self.securities = {}
         self.base_currency_unit = base_currency_unit
         self._total_invested = 0
-        self.update_time()
+        self.last_update_time = None
         self.creation_time = ts_format()
         self.first_transaction_time = None
         self.last_checkpoint = None
@@ -32,7 +32,8 @@ class Portfolio():
         if from_currency:
             return sum(map(lambda x: x.get_total_return(currency_unit), self.securities.values()))
         else:
-            return self.get_current_value(currency_unit) - self._total_invested
+            total_invested = self.get_total_invested(currency_unit=currency_unit,from_currency=from_currency)
+            return self.get_current_value(currency_unit) - total_invested
 
     def get_return_rate(self, from_currency=False):
         result = self.get_total_return(from_currency=from_currency)
@@ -59,7 +60,7 @@ class Portfolio():
                 self._total_invested = return_value
             return return_value
         else:
-            return self._total_invested
+            return self.base_currency_unit.convert(currency_unit,self._total_invested)
 
     def top_up(self, value, currency_unit, fee=0, avg_base_price=None,
                avg_base_price_currency_unit=None, update_avg_price=True,
@@ -67,7 +68,7 @@ class Portfolio():
         logging.debug(f"Top up of Portfolio started")
         logging.debug(f"\t top up Args: {locals()}")
         if currency_unit.name not in self.securities:
-            self.securities[currency_unit.name] = currency_unit.create_currency()
+            self.securities[currency_unit.name] = currency_unit.create_currency(self.base_currency_unit)
 
         if avg_base_price is None:
             avg_base_price = currency_unit.convert(self.base_currency_unit, 1)
@@ -211,6 +212,7 @@ class Portfolio():
             portfolio = clf(
                 CurrencyUnit.create_currency_unit(base_currency_ticker))
         else:
+
             portfolio = portfolio["value"]
             start = portfolio.last_update_time
             logging.debug(f"Loaded portfolio from cache with last update time = {start}")
@@ -219,14 +221,17 @@ class Portfolio():
         if trades_history is None:
 
             trades_history, _ = client.get_ledgers_info(
-                ascending=True, start=start)
+                ascending=True, start=start.value if start is not None else None)
             save_data(trades_history, cached_ledger_path)
         else:
             trades_history = trades_history["value"]
+
+        if portfolio.last_update_time is not None:
             trades_history = trades_history[trades_history.index > portfolio.last_update_time]
 
         last_entry = None
         for ts, entry in trades_history.iterrows():
+            
             logging.debug(str((ts, entry.asset, portfolio.securities)))
             if last_entry is not None and entry.type != "trade":
                 raise ValueError("Corrupted ledger")

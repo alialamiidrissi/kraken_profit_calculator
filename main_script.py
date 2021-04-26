@@ -1,7 +1,8 @@
 import argparse
 from portfolio import Portfolio
+from currencies import CurrencyUnit
 import logging
-from config import config,client
+from config import config, client
 logging.basicConfig(filename='run_log.log', level=logging.DEBUG, filemode='w')
 
 
@@ -18,8 +19,10 @@ def main(args):
         client.api.key = input("Enter API key:")
     if client.api.secret is None:
         client.api.secret = input("Enter secret:")
-    portfolio = Portfolio.from_kraken_ledger(config["Portfolio"].get("currency",args.currency))
-    portfolio.display()
+    currency = config["Portfolio"].get("currency", args.currency)
+    portfolio = Portfolio.from_kraken_ledger(currency)
+
+    portfolio.display(currency_unit=CurrencyUnit.create_currency_unit(currency))
 
 
 if __name__ == "__main__":
