@@ -78,7 +78,7 @@ class Portfolio():
         self.securities[currency_unit.name].top_up(value, fee=fee, avg_base_price=avg_base_price,
                                                    avg_base_price_currency_unit=avg_base_price_currency_unit,
                                                    update_avg_price=update_avg_price,
-                                                   date = timestamp.normalize())
+                                                   date=timestamp.normalize())
         self._total_invested += avg_base_price*value
         self.total_invested_up_now += avg_base_price*value
 
@@ -114,12 +114,12 @@ class Portfolio():
                                                                    value_bought,
                                                                    sell_fee=sell_fee,
                                                                    buy_fee=buy_fee,
-                                                                   date = timestamp.normalize()
+                                                                   date=timestamp.normalize()
                                                                    )
         logging.debug(f"PORTFOLIO PROFIT {realized_profit}")
-                                                                   
+
         self.realized_profit += profit_currency_unit.convert(self.base_currency_unit,
-                                                                realized_profit)
+                                                             realized_profit)
         logging.debug(f"TOTAL PORTFOLIO PROFIT {self.realized_profit}")
 
         if self.last_checkpoint is None:
@@ -170,14 +170,12 @@ class Portfolio():
         total_invested = self.get_total_invested(currency_unit)
         total_invested_up_now = self.get_total_invested_up_now(
             currency_unit)
-        
 
         display_str = f"{tabulation}Current value: {current_val} {currency_unit.name}\n"
         display_str += f"{tabulation}Invested: {total_invested} {currency_unit.name}\n"
         display_str += f"{tabulation}Invested all to now: {total_invested_up_now} {currency_unit.name}\n"
         profit = self.get_total_return(
             currency_unit=currency_unit)
-        
 
         # realized_profit = self.get_realized_return(currency_unit)
         display_str += f"{tabulation}Unrealized Return: {profit} {currency_unit.name}\n"
@@ -206,7 +204,7 @@ class Portfolio():
         ttl = int(config["Global"].get("ttl", 3600))
         cached_portfolio_path = "cached_portfolio.pkl"
         cached_ledger_path = "cached_ledger.pkl"
-        portfolio = read_data(cached_portfolio_path)
+        portfolio = read_data(cached_portfolio_path, add_path_prefix=True)
         trades_history = get_cached(cached_ledger_path, expiration=ttl)
         if portfolio is None:
             start = None
@@ -215,6 +213,8 @@ class Portfolio():
         else:
             portfolio = portfolio["value"]
             start = portfolio.last_update_time
+            logging.debug(f"Loaded portfolio from cache with last update time = {start}")
+
 
         if trades_history is None:
 
@@ -223,7 +223,7 @@ class Portfolio():
             save_data(trades_history, cached_ledger_path)
         else:
             trades_history = trades_history["value"]
-            trades_history[trades_history.index > portfolio.last_update_time]
+            trades_history = trades_history[trades_history.index > portfolio.last_update_time]
 
         last_entry = None
         for ts, entry in trades_history.iterrows():

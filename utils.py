@@ -111,7 +111,6 @@ def get_pair_from_kraken(from_curr, to_curr, client, date=None):
 
 def get_latest_pair_from_kraken(client):
     def inner_func(pair):
-        print(f"GET latest {pair}")
         price = float(client.get_ticker_information(pair)["c"].iloc[0][0])
         return price
     return inner_func
@@ -119,7 +118,6 @@ def get_latest_pair_from_kraken(client):
 
 def get_ohlc_from_kraken(client):
     def inner_func(pair):
-        print(f"GET OHLC {pair}")
         price = client.get_ohlc_data(pair)[0]
         return price
     return inner_func
