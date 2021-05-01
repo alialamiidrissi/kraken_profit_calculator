@@ -162,7 +162,7 @@ def retry_conversion(func,from_currency, to_currency, *args, **kwargs):
             logging.debug(f"{pair_2} conversion Successfull")
         except:
             continue
-    if (price_data_1 is None) or (price_data_2 is None):
-        raise ValueError(
-                f"Cannot convert {from_currency} to {to_currency}")
-    return price_data_1, price_data_2
+        return price_data_1, price_data_2
+
+    raise ValueError(
+            f"Cannot convert {from_currency} to {to_currency}")
