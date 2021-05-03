@@ -24,7 +24,7 @@ class CurrencyUnit():
     def get_cached(self, to, date, attr="price"):
         expiration = float(config["Global"].get("ttl", 3600))
         price_data, requested_price = None, None
-        if date is None:
+        if (date == None) or (date.normalize() == pd.to_datetime("now").normalize()):
             save_file = f"{self.name}_{to}_latest.pkl"
             price_data = utils_get_cached(save_file, expiration=expiration)
             if price_data is not None:
@@ -41,10 +41,10 @@ class CurrencyUnit():
             if price_data is not None:
                 # Check if the exchange rate for the requested date is available
                 price_data = price_data["value"]
-                requested_price = price_data.loc[date]
-                if len(requested_price) > 0:
+                if date in price_data.index:
+                    requested_price = price_data.loc[date]
                     requested_price = float(
-                        price_data[attr].iloc[0])
+                        requested_price[attr])
 
         return price_data, requested_price, date
 
@@ -71,7 +71,7 @@ class CryptoUnit(CurrencyUnit):
         if requested_price is None:
             requested_price_kraken = get_pair_from_kraken(
                 self.name, to, client, date=date)
-            if date == None:
+            if (date == None) or (date.normalize() == pd.to_datetime("now").normalize()):
                 save_file = f"{self.name}_{to}_latest.pkl"
                 requested_price = float(requested_price_kraken)
                 save_data(requested_price, save_file)
@@ -91,6 +91,7 @@ class CryptoUnit(CurrencyUnit):
                 save_data(requested_price_kraken, save_file)
 
         logging.debug(f"Price data {price_data}: {type(price_data)}")
+        logging.debug(f"Price data {requested_price}: {type(requested_price)}")
 
         return requested_price*amount
 
@@ -119,7 +120,7 @@ class FiatUnit(CurrencyUnit):
         price_data, requested_price, date = self.get_cached(to, date)
 
         if requested_price is None:
-            if date == None:
+            if (date == None) or (date.normalize() == pd.to_datetime("now").normalize()):
                 save_file = f"{self.name}_{to}_latest.pkl"
 
                 price_url = url_join(URL_MARKET_PRICE_FIAT, "latest")
@@ -304,23 +305,24 @@ class Currency():
         logging.debug(
             f"{self.ticker}_Portfolio State {list(map(lambda x: (x,getattr(self,x)),filtered_global_var))}")
 
-    def get_total_return(self, currency_unit=None):
-        total_return = (self.get_current_value() - self.total_invested)
+    def get_total_return(self, currency_unit=None, date=None):
+        total_return = (self.get_current_value(
+            date=date) - self.total_invested)
         if currency_unit is not None:
             total_return = self.base_currency_unit.convert(
-                currency_unit, total_return)
+                currency_unit, total_return, date=date)
         return total_return
 
-    def get_return_rate(self):
+    def get_return_rate(self, date=None):
         if self.total_invested == 0:
             return 0
-        return self.get_total_return()/self.total_invested
+        return self.get_total_return(date=date)/self.total_invested
 
-    def get_current_value(self, currency_unit=None):
+    def get_current_value(self, currency_unit=None, date=None):
         if currency_unit is None:
             currency_unit = self.base_currency_unit
             logging.debug(f"CU: {currency_unit}")
-        return self.currency_unit.convert(currency_unit, self.value)
+        return self.currency_unit.convert(currency_unit, self.value, date=date)
 
     def get_current_unit_value(self, currency_unit=None):
         if currency_unit is None:

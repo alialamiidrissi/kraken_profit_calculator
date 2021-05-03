@@ -7,7 +7,7 @@ import logging
 import pandas as pd
 import numbers
 from pykrakenapi.pykrakenapi import KrakenAPIError
-
+import datetime
 
 def url_join(*urls):
     return '/'.join(url.strip('/') for url in urls)
@@ -166,3 +166,16 @@ def retry_conversion(func,from_currency, to_currency, *args, **kwargs):
 
     raise ValueError(
             f"Cannot convert {from_currency} to {to_currency}")
+
+
+def str2date(str_date):
+    return_date = None
+    if str_date is None:
+        return_date = pd.to_datetime("now")
+    elif (type(return_date) is not pd.Timestamp):
+        return_date = pd.to_datetime(str_date)
+    else:
+        return_date = str_date
+    return return_date.normalize()
+
+

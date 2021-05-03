@@ -5,10 +5,12 @@ from utils import FIAT_CURRENCIES
 import time
 import krakenex
 from pykrakenapi import KrakenAPI
-from utils import get_cached, save_data, ts_format, read_data
+from utils import get_cached, save_data, ts_format, read_data, str2date
 import logging
 from config import client, config
 import copy
+from collections import defaultdict
+import matplotlib.pyplot as plt
 
 
 class Portfolio():
@@ -26,28 +28,29 @@ class Portfolio():
     def update_time(self, ts=None):
         self.last_update_time = ts_format(ts)
 
-    def get_total_return(self, currency_unit=None, from_currency=False):
+    def get_total_return(self, currency_unit=None, from_currency=False, date=None):
         if currency_unit is None:
             currency_unit = self.base_currency_unit
         if from_currency:
-            return sum(map(lambda x: x.get_total_return(currency_unit), self.securities.values()))
+            return sum(map(lambda x: x.get_total_return(currency_unit, date=date), self.securities.values()))
         else:
-            total_invested = self.get_total_invested(currency_unit=currency_unit,from_currency=from_currency)
-            return self.get_current_value(currency_unit) - total_invested
+            total_invested = self.get_total_invested(
+                currency_unit=currency_unit, from_currency=from_currency)
+            return self.get_current_value(currency_unit, date=date) - total_invested
 
-    def get_return_rate(self, from_currency=False):
-        result = self.get_total_return(from_currency=from_currency)
-        denom = self.get_current_value()
+    def get_return_rate(self, from_currency=False, date=None):
+        result = self.get_total_return(from_currency=from_currency, date=date)
+        denom = self.get_current_value(date=date)
         if denom == 0:
             return 0
         result /= denom
 
         return result
 
-    def get_current_value(self, currency_unit=None):
+    def get_current_value(self, currency_unit=None, date=None):
         if currency_unit is None:
             currency_unit = self.base_currency_unit
-        return sum(map(lambda x: x.get_current_value(currency_unit), self.securities.values()))
+        return sum(map(lambda x: x.get_current_value(currency_unit, date=date), self.securities.values()))
 
     def get_total_invested(self, currency_unit=None, from_currency=False, update_from_currency=False):
         if currency_unit is None:
@@ -60,7 +63,7 @@ class Portfolio():
                 self._total_invested = return_value
             return return_value
         else:
-            return self.base_currency_unit.convert(currency_unit,self._total_invested)
+            return self.base_currency_unit.convert(currency_unit, self._total_invested)
 
     def top_up(self, value, currency_unit, fee=0, avg_base_price=None,
                avg_base_price_currency_unit=None, update_avg_price=True,
@@ -68,7 +71,8 @@ class Portfolio():
         logging.debug(f"Top up of Portfolio started")
         logging.debug(f"\t top up Args: {locals()}")
         if currency_unit.name not in self.securities:
-            self.securities[currency_unit.name] = currency_unit.create_currency(self.base_currency_unit)
+            self.securities[currency_unit.name] = currency_unit.create_currency(
+                self.base_currency_unit)
 
         if avg_base_price is None:
             avg_base_price = currency_unit.convert(self.base_currency_unit, 1)
@@ -164,6 +168,75 @@ class Portfolio():
             return 0
         return self.realized_profit / denom
 
+    def get_old_values(self, currency_unit=None, per_currency=True,
+                       start_date="2021-04-01", end_date=None,
+                       func_name="get_return_rate"):
+
+        rates = []
+        dates = []
+        if per_currency:
+            per_currency_dict = defaultdict(list)
+        if self.last_update_time is not None:
+            end_date = str2date(end_date)
+            start_date = str2date(start_date)
+            for date in pd.date_range(start=start_date, end=end_date)[::-1]:
+
+                if (date < pd.to_datetime(self.last_update_time).normalize()):
+                    if self.last_checkpoint is not None:
+                        tmp_res = self.last_checkpoint.get_old_values(currency_unit=currency_unit,
+                                                                      end_date=date, start_date=start_date,
+                                                                      per_currency=per_currency,
+                                                                      func_name=func_name
+                                                                      )
+                        if per_currency:
+                            rates_tmp, dates_tmp, per_currency_dict_tmp = tmp_res
+                        else:
+                            rates_tmp, dates_tmp = tmp_res
+
+                        rates += rates_tmp
+                        dates += dates_tmp
+
+                        # extend
+                        for key, values in per_currency_dict_tmp.items():
+                            per_currency_dict[key].extend(values)
+                    break
+                else:
+                    rates.append(getattr(self, func_name)(date=date))
+                    dates.append(date)
+                    if per_currency:
+                        for name, currency in self.securities.items():
+                            per_currency_dict[name].append((date,
+                                                            getattr(currency, func_name)(date=date)))
+        if per_currency:
+            return rates, dates, per_currency_dict
+        else:
+            return rates, dates
+
+    def plot_old_values(self, currency_unit=None, per_currency=True,
+                        start_date="2021-04-01", end_date=None,
+                        func_name="get_return_rate", title=None):
+
+        res = self.get_old_values(currency_unit=currency_unit, per_currency=per_currency,
+                                  start_date=start_date, end_date=end_date,
+                                  func_name=func_name)
+        if per_currency:
+            total_values, dates, per_currency_values = res
+        else:
+            total_values, dates = res
+        
+        plt.figure(figsize=(10, 10))
+        plt.plot(dates[::-1], total_values[::-1], label="Total")
+        if per_currency:
+            for key, currency_values_dates in per_currency_values.items():
+                dates,currency_values = zip(*currency_values_dates)
+                plt.plot(dates[::-1], currency_values[::-1], label=key)
+
+        plt.legend()
+        plt.title(title if title is not None else func_name)
+        plt.tight_layout()
+        plt.draw()
+        plt.show()
+
     def display(self, verbose=True, tabulation="", currency_unit=None, tabulation_char="\t"):
         if currency_unit is None:
             currency_unit = self.base_currency_unit
@@ -215,8 +288,8 @@ class Portfolio():
 
             portfolio = portfolio["value"]
             start = portfolio.last_update_time
-            logging.debug(f"Loaded portfolio from cache with last update time = {start}")
-
+            logging.debug(
+                f"Loaded portfolio from cache with last update time = {start}")
 
         if trades_history is None:
 
@@ -227,11 +300,12 @@ class Portfolio():
             trades_history = trades_history["value"]
 
         if portfolio.last_update_time is not None:
-            trades_history = trades_history[trades_history.index > portfolio.last_update_time]
+            trades_history = trades_history[trades_history.index >
+                                            portfolio.last_update_time]
 
         last_entry = None
         for ts, entry in trades_history.iterrows():
-            
+
             logging.debug(str((ts, entry.asset, portfolio.securities)))
             if last_entry is not None and entry.type != "trade":
                 raise ValueError("Corrupted ledger")
